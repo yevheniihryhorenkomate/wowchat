@@ -1,0 +1,6 @@
+# Runtime
+discord.py==2.3.2
+pyhocon==0.3.60
+
+# Optional performance
+uvloop==0.20.0
