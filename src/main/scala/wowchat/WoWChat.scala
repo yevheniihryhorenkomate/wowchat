@@ -72,12 +72,19 @@ object WoWChat extends StrictLogging {
       }
     }
 
-    logger.info("Connecting to Discord...")
-    Global.discord = new Discord(new CommonConnectionCallback {
-      override def connected: Unit = gameConnectionController.connect
+    // Перевіряємо, чи є Discord токен
+    if (Global.config.discord.token.nonEmpty) {
+      logger.info("Connecting to Discord...")
+      Global.discord = new Discord(new CommonConnectionCallback {
+        override def connected: Unit = gameConnectionController.connect
 
-      override def error: Unit = sys.exit(1)
-    })
+        override def error: Unit = sys.exit(1)
+      })
+    } else {
+      logger.info("No Discord token configured. Running without Discord.")
+      Global.discord = null
+      gameConnectionController.connect
+    }
   }
 
   private def checkForNewVersion = {

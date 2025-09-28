@@ -12,6 +12,7 @@ from wowchat.common.global_state import Global
 from wowchat.common.packet import ByteReader
 from wowchat.realm.packets import RealmPackets
 from wowchat.realm.srp_client import SRPClient
+from wowchat.realm.big_number import BigNumber
 
 
 @dataclass
@@ -66,17 +67,23 @@ class RealmConnector:
 
 	async def _read_loop(self, conf: WowChatConfig) -> None:
 		assert self._reader and self._writer
-		while True:
-			id_b = await self._read_exact(1)
-			pkt_id = id_b[0]
-			if pkt_id == RealmPackets.CMD_AUTH_LOGON_CHALLENGE:
-				await self._handle_logon_challenge(conf)
-			elif pkt_id == RealmPackets.CMD_AUTH_LOGON_PROOF:
-				await self._handle_logon_proof()
-			elif pkt_id == RealmPackets.CMD_REALM_LIST:
-				await self._handle_realm_list(conf)
-			else:
-				self._logger.debug("Unknown realm packet %02X", pkt_id)
+		try:
+			while True:
+				id_b = await self._read_exact(1)
+				pkt_id = id_b[0]
+				if pkt_id == RealmPackets.CMD_AUTH_LOGON_CHALLENGE:
+					await self._handle_logon_challenge(conf)
+				elif pkt_id == RealmPackets.CMD_AUTH_LOGON_PROOF:
+					await self._handle_logon_proof()
+				elif pkt_id == RealmPackets.CMD_REALM_LIST:
+					await self._handle_realm_list(conf)
+					# Після обробки realm list, виходимо з циклу
+					break
+				else:
+					self._logger.debug("Unknown realm packet %02X", pkt_id)
+		except Exception as e:
+			self._logger.error("Error in realm read loop: %s", e)
+			raise
 
 	async def _handle_logon_challenge(self, conf: WowChatConfig) -> None:
 		# We already read id; now parse the rest according to Scala logic
@@ -187,5 +194,21 @@ class RealmConnector:
 		h, p = match_addr.split(":")
 		port = int(p) & 0xFFFF
 		self._logger.info("Selected realm %s at %s:%s (id=%s)", name, h, port, match_id)
-		# TODO: continue to game connector with session key
+		
+		# Закриваємо realm з'єднання
 		self._writer.close()
+		
+		# Підключаємося до game сервера
+		await self._connect_to_game_server(h, port, name, match_id)
+
+	async def _connect_to_game_server(self, host: str, port: int, realm_name: str, realm_id: int) -> None:
+		"""Підключитися до ігрового сервера"""
+		try:
+			from wowchat.game.connector import GameConnector
+			
+			game_connector = GameConnector(host, port, realm_name, realm_id, self._session_key)
+			await game_connector.connect()
+			
+		except Exception as e:
+			self._logger.error("Failed to connect to game server: %s", e)
+			raise

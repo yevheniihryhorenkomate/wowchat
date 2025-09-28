@@ -34,6 +34,10 @@ class GamePacketHandlerWotLK(realmId: Int, realmName: String, sessionKey: Array[
     msg.byteBuf.skipBytes(4) // wotlk
     val serverSeed = msg.byteBuf.readInt
     val clientSeed = Random.nextInt
+    
+    logger.info(s"Server seed: 0x${serverSeed.toHexString.toUpperCase}, Client seed: 0x${clientSeed.toHexString.toUpperCase}")
+    logger.info(s"Session key: ${sessionKey.map(b => f"$b%02x").mkString}")
+    
     val out = PooledByteBufAllocator.DEFAULT.buffer(200, 400)
     out.writeShortLE(0)
     out.writeIntLE(WowChatConfig.getGameBuild)
@@ -53,9 +57,18 @@ class GamePacketHandlerWotLK(realmId: Int, realmName: String, sessionKey: Array[
     md.update(ByteUtils.intToBytes(clientSeed))
     md.update(ByteUtils.intToBytes(serverSeed))
     md.update(sessionKey)
-    out.writeBytes(md.digest)
-
+    val hashResult = md.digest
+    
+    logger.debug(s"Hash input - account: ${account.mkString}, client_seed: 0x${clientSeed.toHexString.toUpperCase}, server_seed: 0x${serverSeed.toHexString.toUpperCase}, session_key: ${sessionKey.map(b => f"$b%02x").mkString}")
+    logger.debug(s"Hash result: ${hashResult.map(b => f"$b%02x").mkString}")
+    
+    out.writeBytes(hashResult)
     out.writeBytes(addonInfo)
+
+    val packetArray = new Array[Byte](out.writerIndex())
+    out.getBytes(0, packetArray)
+    logger.info(s"Packet data hex: ${packetArray.map(b => f"$b%02x").mkString}")
+    logger.info(s"Packet size: ${out.writerIndex()}")
 
     AuthChallengeMessage(sessionKey, out)
   }

@@ -1,15 +1,15 @@
 from __future__ import annotations
 
 import hashlib
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from wowchat.realm.big_number import BigNumber
 
 
 @dataclass
 class SRPClient:
-	k: BigNumber = BigNumber(3)  # type: ignore[arg-type]
-	a: BigNumber = BigNumber.rand(19)
+	k: BigNumber = field(default_factory=lambda: BigNumber(3))
+	a: BigNumber = field(default_factory=lambda: BigNumber.rand(19))
 	A: BigNumber | None = None
 	x: BigNumber | None = None
 	M: BigNumber | None = None

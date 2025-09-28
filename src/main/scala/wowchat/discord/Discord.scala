@@ -22,12 +22,16 @@ import scala.collection.mutable
 class Discord(discordConnectionCallback: CommonConnectionCallback) extends ListenerAdapter
   with GamePackets with StrictLogging {
 
-  private val jda = JDABuilder
-    .createDefault(Global.config.discord.token, GatewayIntent.GUILD_MESSAGES, GatewayIntent.GUILD_MEMBERS, GatewayIntent.GUILD_PRESENCES, GatewayIntent.GUILD_EMOJIS)
-    .setMemberCachePolicy(MemberCachePolicy.ALL)
-    .disableCache(CacheFlag.VOICE_STATE)
-    .addEventListeners(this)
-    .build
+  private val jda = if (Global.config.discord.token.nonEmpty) {
+    JDABuilder
+      .createDefault(Global.config.discord.token, GatewayIntent.GUILD_MESSAGES, GatewayIntent.GUILD_MEMBERS, GatewayIntent.GUILD_PRESENCES, GatewayIntent.GUILD_EMOJIS)
+      .setMemberCachePolicy(MemberCachePolicy.ALL)
+      .disableCache(CacheFlag.VOICE_STATE)
+      .addEventListeners(this)
+      .build
+  } else {
+    null
+  }
 
   private val messageResolver = MessageResolver(jda)
 
@@ -35,8 +39,10 @@ class Discord(discordConnectionCallback: CommonConnectionCallback) extends Liste
   private var firstConnect = true
 
   def changeStatus(gameType: ActivityType, message: String): Unit = {
-    lastStatus = Some(Activity.of(gameType, message))
-    jda.getPresence.setActivity(lastStatus.get)
+    if (jda != null) {
+      lastStatus = Some(Activity.of(gameType, message))
+      jda.getPresence.setActivity(lastStatus.get)
+    }
   }
 
   def changeGuildStatus(message: String): Unit = {
@@ -48,6 +54,7 @@ class Discord(discordConnectionCallback: CommonConnectionCallback) extends Liste
   }
 
   def sendMessageFromWow(from: Option[String], message: String, wowType: Byte, wowChannel: Option[String]): Unit = {
+    if (jda == null) return
     Global.wowToDiscord.get((wowType, wowChannel.map(_.toLowerCase))).foreach(discordChannels => {
       val parsedLinks = messageResolver.resolveEmojis(messageResolver.stripColorCoding(messageResolver.resolveLinks(message)))
 
