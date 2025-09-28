@@ -31,6 +31,18 @@ class RealmConnector:
 		self._srp = SRPClient()
 		self._session_key: Optional[bytes] = None
 
+		# CRC hashes per Scala implementation (subset sufficient for WotLK 3.3.5)
+		# Keyed by (build, platform)
+		self._build_crc_hashes: dict[tuple[int, str], bytes] = {
+			# 3.3.5 (12340)
+			(12340, Platform.Mac): bytes([
+				0xB7, 0x06, 0xD1, 0x3F, 0xF2, 0xF4, 0x01, 0x88, 0x39, 0x72, 0x94, 0x61, 0xE3, 0xF8, 0xA0, 0xE2, 0xB5, 0xFD, 0xC0, 0x34
+			]),
+			(12340, Platform.Windows): bytes([
+				0xCD, 0xCB, 0xBD, 0x51, 0x88, 0x31, 0x5E, 0x6B, 0x4D, 0x19, 0x44, 0x9D, 0x49, 0x2D, 0xBC, 0xFA, 0xF1, 0x56, 0xA3, 0x47
+			]),
+		}
+
 	async def connect(self, conf: WowChatConfig) -> None:
 		host = conf.wow.realmlist.host
 		port = conf.wow.realmlist.port
@@ -124,8 +136,9 @@ class RealmConnector:
 		m_arr = self._srp.M.as_byte_array(20, reverse=False)  # type: ignore[union-attr]
 		md = hashlib.sha1()
 		md.update(A_arr)
-		# Build CRC based on build and platform (subset of Scala build hashes omitted in scaffold)
-		crc = bytes(20)
+		# Build CRC based on build and platform (align with Scala)
+		crc_bytes = self._build_crc_hashes.get((get_realm_build(conf), conf.wow.platform), bytes(20))
+		md.update(crc_bytes)
 		crc_hash = md.digest()
 		out = bytearray()
 		out += A_arr
@@ -161,32 +174,22 @@ class RealmConnector:
 		name = conf.wow.realmlist.name
 		match_addr: Optional[str] = None
 		match_id = 0
-		if conf.expansion == WowExpansion.Vanilla:
-			num_realms = buf.read_u8()
-			for _ in range(num_realms):
-				buf.skip(4)
-				realm_flags = buf.read_u8()
-				realm_name = buf.read_cstring()
-				addr = buf.read_cstring()
-				buf.skip(6)
-				realm_id = buf.read_u8()  # Byte як у Scala
-				if realm_name.lower() == name.lower():
-					match_addr = addr
-					match_id = realm_id
-		else:
-			num_realms = buf.read_u16le()
-			for _ in range(num_realms):
-				buf.skip(2)
-				realm_flags = buf.read_u8()
-				realm_name = buf.read_cstring()
-				addr = buf.read_cstring()
-				buf.skip(6)
-				realm_id = buf.read_u8()  # Byte як у Scala
-				if (realm_flags & 0x04) == 0x04:
-					buf.skip(5)
-				if realm_name.lower() == name.lower():
-					match_addr = addr
-					match_id = realm_id
+		# Align with Scala: number of realms is a single byte for all expansions
+		num_realms = buf.read_u8()
+		for _ in range(num_realms):
+			# For non-vanilla servers the structure differences are minor; Scala skips 4 then reads flags
+			buf.skip(4)
+			realm_flags = buf.read_u8()
+			realm_name = buf.read_cstring()
+			addr = buf.read_cstring()
+			buf.skip(6)
+			realm_id = buf.read_u8()  # Byte як у Scala
+			if (realm_flags & 0x04) == 0x04:
+				# If server embeds build into name, Scala later strips it but still continues
+				buf.skip(5)
+			if realm_name.lower() == name.lower():
+				match_addr = addr
+				match_id = realm_id
 		if not match_addr:
 			self._logger.error("Realm %s not found in list", name)
 			self._writer.close()
