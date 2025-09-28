@@ -4,3 +4,6 @@ PyYAML==6.0.2
 
 # Optional performance
 uvloop==0.20.0
+
+# Optional Discord integration (install separately if you have a token)
+# discord.py==2.3.2
