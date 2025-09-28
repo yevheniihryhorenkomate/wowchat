@@ -2,9 +2,10 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass
-from typing import Iterable, List, Optional, Sequence, Tuple
+from typing import Iterable, List, Optional, Sequence, Tuple, TYPE_CHECKING
 
-import discord
+if TYPE_CHECKING:  # Only for type hints; avoids importing discord at runtime
+    import discord  # type: ignore
 
 from wowchat.common.config import WowExpansion
 from wowchat.game.resources import GameResources
@@ -17,7 +18,7 @@ class _RegexSpec:
 
 
 class MessageResolver:
-	def __init__(self, client: discord.Client, expansion: str) -> None:
+    def __init__(self, client: 'discord.Client', expansion: str) -> None:
 		self._client = client
 		self._expansion = expansion
 		self._link_site = self._site_for_expansion(expansion)
@@ -64,7 +65,7 @@ class MessageResolver:
 		pass1 = re.compile(r"\|c[0-9a-fA-F]{8}(.*?)\|r")
 		return hex_pat.sub("", pass1.sub(lambda m: m.group(1), message))
 
-	def resolve_tags(self, channel: discord.TextChannel, message: str, on_error) -> str:
+    def resolve_tags(self, channel: 'discord.TextChannel', message: str, on_error) -> str:
 		regexes = [re.compile(r'"@(.+?)"'), re.compile(r"@([\w]+)")]
 		members = [m for m in channel.members if m.id != self._client.user.id]  # type: ignore[union-attr]
 		effective = [(m.display_name, m.id) for m in members]

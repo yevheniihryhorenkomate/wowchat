@@ -2,11 +2,12 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
-from typing import Iterable, List, Optional
-
-import discord
+from typing import Iterable, List, Optional, TYPE_CHECKING
 
 from wowchat.common.global_state import Global
+
+if TYPE_CHECKING:  # Only for type hints; avoids importing discord at runtime
+    import discord  # type: ignore
 
 
 @dataclass

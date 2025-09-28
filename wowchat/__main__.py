@@ -1,4 +1,4 @@
-import argparse
+THIS SHOULD BE A LINTER ERRORimport argparse
 import asyncio
 import logging
 import os
@@ -41,7 +41,12 @@ async def main_async() -> None:
 		return
 
 	# Import Discord client lazily to avoid requiring discord.py when not used
-	from wowchat.discord.client import DiscordClient  # local import
+	try:
+		from wowchat.discord.client import DiscordClient  # local import
+	except Exception as e:  # pragma: no cover
+		logger.error("Discord token provided but Discord client is unavailable: %s", e)
+		logger.error("Install discord.py or remove the token to run without Discord.")
+		return
 	discord = DiscordClient()
 	Global.discord = discord
 	await discord.start(token)
