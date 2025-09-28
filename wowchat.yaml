@@ -1,0 +1,17 @@
+# AzerothCore server details
+realmlist: "logoneu.nozdor.com"
+realm_port: 3724
+world_port: 3724  # Will be parsed from realm list
+
+# Account credentials
+account: "keshaqq"
+password: "zhopabobra"
+character: "Боберлогс"
+realm: "Nozdor x5"
+
+# Version settings
+version: "3.3.5"
+build: 12340
+locale: "enUS"
+platform: "Windows"
+

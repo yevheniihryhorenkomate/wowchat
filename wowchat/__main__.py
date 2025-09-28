@@ -6,7 +6,6 @@ import sys
 
 from wowchat.common.config import load_config
 from wowchat.common.global_state import Global
-from wowchat.discord.client import DiscordClient
 from wowchat.game.resources import GameResources
 
 
@@ -25,17 +24,27 @@ async def main_async() -> None:
 
 	Global.config = load_config(conf_path)
 
-    logging.basicConfig(
+	logging.basicConfig(
 		level=logging.INFO,
 		format="%(asctime)s %(levelname)s %(name)s | %(message)s",
 	)
 	logger = logging.getLogger("wowchat")
 	logger.info("Running WoWChat - v1.3.8-py")
 
+	# Load static game resources first
+	GameResources.load(Global.config.expansion)
+
+	# Start Discord only if a token is configured
+	token = (getattr(Global.config.discord, "token", "") or "").strip()
+	if not token:
+		logger.info("No Discord token configured. Skipping Discord client startup.")
+		return
+
+	# Import Discord client lazily to avoid requiring discord.py when not used
+	from wowchat.discord.client import DiscordClient  # local import
 	discord = DiscordClient()
 	Global.discord = discord
-    GameResources.load(Global.config.expansion)
-	await discord.start(Global.config.discord.token)
+	await discord.start(token)
 
 
 def main() -> None:
