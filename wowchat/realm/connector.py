@@ -169,7 +169,7 @@ class RealmConnector:
 				realm_name = buf.read_cstring()
 				addr = buf.read_cstring()
 				buf.skip(6)
-				realm_id = buf.read_u8()
+				realm_id = buf.read_u8()  # Byte як у Scala
 				if realm_name.lower() == name.lower():
 					match_addr = addr
 					match_id = realm_id
@@ -181,7 +181,7 @@ class RealmConnector:
 				realm_name = buf.read_cstring()
 				addr = buf.read_cstring()
 				buf.skip(6)
-				realm_id = buf.read_u8()
+				realm_id = buf.read_u8()  # Byte як у Scala
 				if (realm_flags & 0x04) == 0x04:
 					buf.skip(5)
 				if realm_name.lower() == name.lower():

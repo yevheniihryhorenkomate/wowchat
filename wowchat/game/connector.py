@@ -152,7 +152,7 @@ class GameConnector:
         self._logger.info("Auth challenge data hex: %s", data.hex())
         
         # Парсимо дані (WotLK версія - пропускаємо 4 байти)
-        server_seed = struct.unpack('<I', data[4:8])[0]  # Little-endian як у Scala
+        server_seed = struct.unpack('>I', data[4:8])[0]  # Big-endian як у Scala readInt
         client_seed = random.randint(0, 0xFFFFFFFF)
         self._logger.info("Server seed: 0x%08X, Client seed: 0x%08X", server_seed, client_seed)
         self._logger.info("Session key: %s", self._session_key.hex())
@@ -206,6 +206,10 @@ class GameConnector:
         # Встановлюємо розмір в response (як у Scala) - 0, розмір встановлюється пізніше
         struct.pack_into('<H', response, 0, 0)
         
+        # Ініціалізуємо шифрування заголовків ПЕРЕД відправкою автентифікації (як у Scala)
+        self._header_crypt.init(self._session_key)
+        self._logger.debug("Header encryption initialized")
+        
         # Відправляємо відповідь (розмір - big-endian, ID - little-endian)
         # CMSG_AUTH_CHALLENGE НЕ ШИФРУЄТЬСЯ (як у Scala версії)
         header_size = 4
@@ -217,10 +221,6 @@ class GameConnector:
         self._logger.info("Packet data hex: %s", response.hex())
         self._writer.write(packet)
         await self._writer.drain()
-        
-        # Ініціалізуємо шифрування заголовків ПІСЛЯ відправки автентифікації (як у Scala)
-        self._header_crypt.init(self._session_key)
-        self._logger.debug("Header encryption initialized")
 
     async def _handle_auth_response(self, data: bytes) -> None:
         """Обробка SMSG_AUTH_RESPONSE"""
