@@ -126,3 +126,18 @@ OR to compile yourself:
 3. Run `mvn clean package` which will produce a file in the target folder called `wowchat-1.3.8.zip`
 4. unzip `wowchat-1.3.8.zip`, edit the configuration file and run `java -jar wowchat.jar <config file>`
    * If no config file is supplied, the bot will try to use `wowchat.conf`
+
+### Python port (experimental)
+
+- Install base requirements:
+  - `pip install -r requirements.txt`
+- Optional: enable Discord integration
+  - Install extra dependency: `pip install discord.py==2.3.2` (or `pip install -r requirements-discord.txt` if present)
+  - Provide a Discord bot token in the config (`discord.token`) or via `DISCORD_TOKEN` env var.
+  - If no token is configured, the Discord module is not imported and is skipped automatically.
+
+Run:
+
+```bash
+python -m wowchat path/to/wowchat.conf
+```
