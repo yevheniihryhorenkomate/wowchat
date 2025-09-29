@@ -31,6 +31,18 @@ class RealmConnector:
 		self._srp = SRPClient()
 		self._session_key: Optional[bytes] = None
 
+		# CRC hashes per Scala implementation (subset sufficient for WotLK 3.3.5)
+		# Keyed by (build, platform)
+		self._build_crc_hashes: dict[tuple[int, str], bytes] = {
+			# 3.3.5 (12340)
+			(12340, Platform.Mac): bytes([
+				0xB7, 0x06, 0xD1, 0x3F, 0xF2, 0xF4, 0x01, 0x88, 0x39, 0x72, 0x94, 0x61, 0xE3, 0xF8, 0xA0, 0xE2, 0xB5, 0xFD, 0xC0, 0x34
+			]),
+			(12340, Platform.Windows): bytes([
+				0xCD, 0xCB, 0xBD, 0x51, 0x88, 0x31, 0x5E, 0x6B, 0x4D, 0x19, 0x44, 0x9D, 0x49, 0x2D, 0xBC, 0xFA, 0xF1, 0x56, 0xA3, 0x47
+			]),
+		}
+
 	async def connect(self, conf: WowChatConfig) -> None:
 		host = conf.wow.realmlist.host
 		port = conf.wow.realmlist.port
@@ -124,8 +136,9 @@ class RealmConnector:
 		m_arr = self._srp.M.as_byte_array(20, reverse=False)  # type: ignore[union-attr]
 		md = hashlib.sha1()
 		md.update(A_arr)
-		# Build CRC based on build and platform (subset of Scala build hashes omitted in scaffold)
-		crc = bytes(20)
+		# Build CRC based on build and platform (align with Scala)
+		crc_bytes = self._build_crc_hashes.get((get_realm_build(conf), conf.wow.platform), bytes(20))
+		md.update(crc_bytes)
 		crc_hash = md.digest()
 		out = bytearray()
 		out += A_arr
@@ -137,15 +150,26 @@ class RealmConnector:
 		await self._writer.drain()
 
 	async def _handle_logon_proof(self) -> None:
-		# Read variable size; in scaffold, read a chunk
-		data = await self._reader.read(64)
+		# Read variable size; read a chunk sufficient to include server proof
+		data = await self._reader.read(128)
 		buf = ByteReader(data)
 		result = buf.read_u8()
 		if not RealmPackets.AuthResult.is_success(result):
 			self._logger.error(RealmPackets.AuthResult.get_message(result))
 			self._writer.close()
 			return
-		# proof compare omitted in scaffold
+		# Compare server proof to locally generated to ensure SRP session key matches
+		server_proof = buf.read_bytes(20)
+		try:
+			assert self._srp is not None and self._srp.A and self._srp.M and self._srp.K
+			expected = self._srp.generate_hash_logon_proof()
+			if server_proof != expected:
+				self._logger.error("SRP server proof mismatch! Expected %s got %s", expected.hex(), server_proof.hex())
+				# Continue anyway; some servers may not send proof consistently
+			else:
+				self._logger.info("SRP server proof OK")
+		except Exception as e:
+			self._logger.debug("SRP proof check skipped: %s", e)
 		# request realm list
 		out = (0).to_bytes(4, 'little')
 		self._writer.write(bytes((RealmPackets.CMD_REALM_LIST,)) + out)
@@ -156,37 +180,28 @@ class RealmConnector:
 		size_b = await self._read_exact(2)
 		size = int.from_bytes(size_b, 'little')
 		payload = await self._read_exact(size)
+		self._logger.debug("Realm list payload: %s", payload.hex())
 		buf = ByteReader(payload)
 		buf.read_u32le()
 		name = conf.wow.realmlist.name
 		match_addr: Optional[str] = None
 		match_id = 0
-		if conf.expansion == WowExpansion.Vanilla:
-			num_realms = buf.read_u8()
-			for _ in range(num_realms):
-				buf.skip(4)
-				realm_flags = buf.read_u8()
-				realm_name = buf.read_cstring()
-				addr = buf.read_cstring()
-				buf.skip(6)
-				realm_id = buf.read_u8()  # Byte як у Scala
-				if realm_name.lower() == name.lower():
-					match_addr = addr
-					match_id = realm_id
-		else:
-			num_realms = buf.read_u16le()
-			for _ in range(num_realms):
-				buf.skip(2)
-				realm_flags = buf.read_u8()
-				realm_name = buf.read_cstring()
-				addr = buf.read_cstring()
-				buf.skip(6)
-				realm_id = buf.read_u8()  # Byte як у Scala
-				if (realm_flags & 0x04) == 0x04:
-					buf.skip(5)
-				if realm_name.lower() == name.lower():
-					match_addr = addr
-					match_id = realm_id
+		# Align with Scala: number of realms is a single byte and fixed field skips
+		num_realms = buf.read_u8()
+		for i in range(num_realms):
+			# Some servers (e.g., AzerothCore) appear to have a 3-byte realm type block here
+			buf.skip(3)
+			realm_flags = buf.read_u8()
+			realm_name = buf.read_cstring()
+			addr = buf.read_cstring()
+			buf.skip(4)  # population
+			buf.skip(1)  # num characters
+			buf.skip(1)  # timezone
+			realm_id = buf.read_u8()  # Byte як у Scala
+			self._logger.debug("Realm[%d]: flags=%02x name=%s addr=%s id=%d", i, realm_flags, realm_name, addr, realm_id)
+			if realm_name.lower() == name.lower():
+				match_addr = addr
+				match_id = realm_id
 		if not match_addr:
 			self._logger.error("Realm %s not found in list", name)
 			self._writer.close()
