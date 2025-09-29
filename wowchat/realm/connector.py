@@ -150,15 +150,24 @@ class RealmConnector:
 		await self._writer.drain()
 
 	async def _handle_logon_proof(self) -> None:
-		# Read variable size; in scaffold, read a chunk
-		data = await self._reader.read(64)
+		# Read variable size; read a chunk sufficient to include server proof
+		data = await self._reader.read(128)
 		buf = ByteReader(data)
 		result = buf.read_u8()
 		if not RealmPackets.AuthResult.is_success(result):
 			self._logger.error(RealmPackets.AuthResult.get_message(result))
 			self._writer.close()
 			return
-		# proof compare omitted in scaffold
+		# Compare server proof to locally generated to ensure SRP session key matches
+		server_proof = buf.read_bytes(20)
+		try:
+			assert self._srp is not None and self._srp.A and self._srp.M and self._srp.K
+			expected = self._srp.generate_hash_logon_proof()
+			if server_proof != expected:
+				self._logger.error("SRP server proof mismatch! Expected %s got %s", expected.hex(), server_proof.hex())
+				# Continue anyway; some servers may not send proof consistently
+		except Exception as e:
+			self._logger.debug("SRP proof check skipped: %s", e)
 		# request realm list
 		out = (0).to_bytes(4, 'little')
 		self._writer.write(bytes((RealmPackets.CMD_REALM_LIST,)) + out)

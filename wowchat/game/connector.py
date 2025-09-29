@@ -164,19 +164,19 @@ class GameConnector:
         response.extend(struct.pack('<I', 0))  # Unknown
         response.extend(Global.config.wow.account)  # Account
         response.append(0)  # Null terminator
-        response.extend(struct.pack('>I', 0))  # WotLK - додаткове поле (big-endian як у Scala рядок 43)
+        response.extend(struct.pack('>I', 0))  # WotLK - додаткове поле (big-endian)
         response.extend(struct.pack('>I', client_seed))  # Client seed (big-endian як у Scala рядок 44)
         response.extend(struct.pack('<I', 0))  # WotLK - додаткове поле (little-endian як у Scala рядок 45)
         response.extend(struct.pack('<I', 0))  # WotLK - додаткове поле (little-endian як у Scala рядок 46)
         response.extend(struct.pack('<I', self._realm_id))  # WotLK - realm ID (little-endian як у Scala рядок 47)
         response.extend(struct.pack('<Q', 3))  # WotLK - додаткове поле (little-endian як у Scala рядок 48)
         
-        # Обчислюємо хеш - точно як у Scala (big-endian для обох seeds)
+        # Обчислюємо хеш - як у Scala: account, 4x00, client_seed (BE), server_seed (BE), session_key
         md = hashlib.sha1()
         md.update(Global.config.wow.account)
         md.update(b'\x00\x00\x00\x00')
-        md.update(struct.pack('>I', client_seed))  # Big-endian для client_seed
-        md.update(struct.pack('>I', server_seed))  # Big-endian для server_seed
+        md.update(struct.pack('>I', client_seed))  # BE client_seed
+        md.update(struct.pack('>I', server_seed))  # BE server_seed
         md.update(self._session_key)
         hash_result = md.digest()
         self._logger.debug("Hash input - account: %s, client_seed: 0x%08X, server_seed: 0x%08X, session_key: %s", 
