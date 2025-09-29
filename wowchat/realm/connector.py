@@ -169,24 +169,25 @@ class RealmConnector:
 		size_b = await self._read_exact(2)
 		size = int.from_bytes(size_b, 'little')
 		payload = await self._read_exact(size)
+		self._logger.debug("Realm list payload: %s", payload.hex())
 		buf = ByteReader(payload)
 		buf.read_u32le()
 		name = conf.wow.realmlist.name
 		match_addr: Optional[str] = None
 		match_id = 0
-		# Align with Scala: number of realms is a single byte for all expansions
+		# Align with Scala: number of realms is a single byte and fixed field skips
 		num_realms = buf.read_u8()
-		for _ in range(num_realms):
-			# For non-vanilla servers the structure differences are minor; Scala skips 4 then reads flags
-			buf.skip(4)
+		for i in range(num_realms):
+			# Some servers (e.g., AzerothCore) appear to have a 3-byte realm type block here
+			buf.skip(3)
 			realm_flags = buf.read_u8()
 			realm_name = buf.read_cstring()
 			addr = buf.read_cstring()
-			buf.skip(6)
+			buf.skip(4)  # population
+			buf.skip(1)  # num characters
+			buf.skip(1)  # timezone
 			realm_id = buf.read_u8()  # Byte як у Scala
-			if (realm_flags & 0x04) == 0x04:
-				# If server embeds build into name, Scala later strips it but still continues
-				buf.skip(5)
+			self._logger.debug("Realm[%d]: flags=%02x name=%s addr=%s id=%d", i, realm_flags, realm_name, addr, realm_id)
 			if realm_name.lower() == name.lower():
 				match_addr = addr
 				match_id = realm_id
