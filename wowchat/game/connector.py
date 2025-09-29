@@ -153,7 +153,8 @@ class GameConnector:
         
         # Парсимо дані (WotLK версія - пропускаємо 4 байти)
         server_seed = struct.unpack('>I', data[4:8])[0]  # Big-endian як у Scala readInt
-        client_seed = random.randint(0, 0xFFFFFFFF)
+        # Match Scala's Random.nextInt range (0..0x7FFFFFFF)
+        client_seed = random.randint(0, 0x7FFFFFFF)
         self._logger.info("Server seed: 0x%08X, Client seed: 0x%08X", server_seed, client_seed)
         self._logger.info("Session key: %s", self._session_key.hex())
         

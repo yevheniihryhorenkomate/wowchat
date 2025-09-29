@@ -166,6 +166,8 @@ class RealmConnector:
 			if server_proof != expected:
 				self._logger.error("SRP server proof mismatch! Expected %s got %s", expected.hex(), server_proof.hex())
 				# Continue anyway; some servers may not send proof consistently
+			else:
+				self._logger.info("SRP server proof OK")
 		except Exception as e:
 			self._logger.debug("SRP proof check skipped: %s", e)
 		# request realm list
